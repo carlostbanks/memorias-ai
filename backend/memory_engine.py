@@ -157,7 +157,7 @@ class MemoryEngine:
             entity_lower = entity.lower()
             if any(name in entity_lower for name in ['restaurant', 'cafe', 'bar']):
                 categories.append('food')
-            elif any(place in entity_lower for name in ['gym', 'hospital', 'clinic']):
+            elif any(name in entity_lower for name in ['gym', 'hospital', 'clinic']):
                 categories.append('health')
                 
         # Default category if none found
@@ -301,8 +301,18 @@ class MemoryEngine:
             cursor.close()
             conn.close()
             
-            # Convert to list of dicts
-            return [dict(memory) for memory in memories]
+            # Convert to list of dicts and fix datetime
+            result = []
+            for memory in memories:
+                memory_dict = dict(memory)
+                # Convert datetime to string
+                if memory_dict.get('created_at'):
+                    memory_dict['created_at'] = memory_dict['created_at'].isoformat()
+                # Convert UUID to string
+                memory_dict['id'] = str(memory_dict['id'])
+                result.append(memory_dict)
+                
+            return result
             
         except Exception as e:
             print(f"Error getting recent memories: {e}")
@@ -325,10 +335,16 @@ class MemoryEngine:
             cursor.close()
             conn.close()
             
-            # Group by categories
+            # Group by categories and fix data types
             clusters = {}
             for memory in memories:
                 memory_dict = dict(memory)
+                # Convert datetime to string
+                if memory_dict.get('created_at'):
+                    memory_dict['created_at'] = memory_dict['created_at'].isoformat()
+                # Convert UUID to string
+                memory_dict['id'] = str(memory_dict['id'])
+                
                 categories = memory_dict.get('categories', ['personal'])
                 
                 for category in categories:
