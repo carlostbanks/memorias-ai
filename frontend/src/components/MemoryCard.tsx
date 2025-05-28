@@ -52,14 +52,6 @@ export function MemoryCard({ memory, showSimilarity = false }: MemoryCardProps) 
     return 'border-gray-200 bg-gray-50/30';
   };
 
-  // Get importance indicator
-  const getImportanceSize = () => {
-    if (memory.importance > 0.8) return 'w-3 h-3';
-    if (memory.importance > 0.6) return 'w-2.5 h-2.5';
-    if (memory.importance > 0.4) return 'w-2 h-2';
-    return 'w-1.5 h-1.5';
-  };
-
   const shouldTruncate = memory.content.length > 150;
   const displayContent = isExpanded || !shouldTruncate 
     ? memory.content 
@@ -73,11 +65,12 @@ export function MemoryCard({ memory, showSimilarity = false }: MemoryCardProps) 
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-2">
-          {/* Importance indicator */}
-          <div
-            className={`rounded-full bg-gray-400 opacity-60 ${getImportanceSize()}`}
-            title={`Importance: ${Math.round(memory.importance * 100)}%`}
-          />
+          {/* Importance badge for high importance memories */}
+          {memory.importance > 0.7 && (
+            <div className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">
+              Important
+            </div>
+          )}
           
           {/* Similarity score (for search results) */}
           {showSimilarity && memory.similarity_score && (

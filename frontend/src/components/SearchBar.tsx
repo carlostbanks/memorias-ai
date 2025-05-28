@@ -44,7 +44,14 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              const newValue = e.target.value;
+              setQuery(newValue);
+              // Auto-search when input is cleared
+              if (newValue === '') {
+                onSearch('');
+              }
+            }}
             placeholder="Search your memories..."
             className="w-full pl-12 pr-20 py-3 text-gray-900 placeholder-gray-500 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50/50 hover:bg-gray-50/80 transition-colors"
             disabled={loading}
