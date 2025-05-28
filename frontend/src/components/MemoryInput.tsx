@@ -34,7 +34,7 @@ export function MemoryInput({ onSubmit, loading }: MemoryInputProps) {
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Tell me something to remember..."
-            className="w-full px-6 py-4 text-lg border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-gray-50/50 hover:bg-gray-50/80 transition-colors"
+            className="w-full px-6 py-4 text-lg text-gray-900 placeholder-gray-500 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-gray-50/50 hover:bg-gray-50/80 transition-colors"
             rows={3}
             disabled={loading}
           />

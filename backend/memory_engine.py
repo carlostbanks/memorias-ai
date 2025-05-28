@@ -16,8 +16,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 class MemoryEngine:
     def __init__(self, db_config: Dict[str, str]):
         # Load AI models
-        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        self.embedding_dim = 384  # Dimension of all-MiniLM-L6-v2
+        self.embedding_model = SentenceTransformer('all-mpnet-base-v2')
+        self.embedding_dim = 768  # Dimension of all-MiniLM-L6-v2
         
         try:
             self.nlp = spacy.load('en_core_web_sm')
@@ -136,15 +136,15 @@ class MemoryEngine:
         
         # Define category keywords
         category_keywords = {
-            'work': ['work', 'job', 'office', 'meeting', 'project', 'colleague', 'boss', 'client', 'deadline'],
-            'family': ['mom', 'dad', 'sister', 'brother', 'family', 'parent', 'child', 'grandmother', 'grandfather'],
-            'friends': ['friend', 'buddy', 'hang out', 'party', 'social', 'catch up'],
+            'work': ['work', 'job', 'office', 'meeting', 'project', 'colleague', 'boss', 'client', 'deadline', 'CEO', 'budget', 'expenses', 'team'],
+            'family': ['mom', 'dad', 'sister', 'brother', 'family', 'parent', 'child', 'grandmother', 'grandfather', 'daughter', 'son', 'baby', 'emma', 'sarah'],
+            'friends': ['friend', 'buddy', 'hang out', 'party', 'social', 'catch up', 'mike'],
             'hobbies': ['hobby', 'learn', 'practice', 'play', 'game', 'sport', 'music', 'art', 'craft'],
-            'health': ['doctor', 'exercise', 'gym', 'sick', 'medicine', 'therapy', 'workout', 'diet'],
-            'travel': ['trip', 'vacation', 'travel', 'visit', 'flight', 'hotel', 'airport', 'destination'],
-            'food': ['restaurant', 'cook', 'eat', 'recipe', 'dinner', 'lunch', 'breakfast', 'meal'],
-            'relationships': ['date', 'relationship', 'love', 'partner', 'boyfriend', 'girlfriend', 'spouse'],
-            'learning': ['study', 'book', 'course', 'school', 'university', 'lesson', 'tutorial'],
+            'health': ['doctor', 'exercise', 'gym', 'sick', 'medicine', 'therapy', 'workout', 'diet', 'checkup', 'blood pressure', 'medical', 'dr.', 'annual', 'appointment'],
+            'travel': ['trip', 'vacation', 'travel', 'visit', 'flight', 'hotel', 'airport', 'destination', 'italy', 'florence', 'rome'],
+            'food': ['restaurant', 'cook', 'eat', 'recipe', 'dinner', 'lunch', 'breakfast', 'meal', 'thai', 'pad thai'],
+            'relationships': ['date', 'relationship', 'love', 'partner', 'boyfriend', 'girlfriend', 'spouse', 'anniversary'],
+            'learning': ['study', 'book', 'course', 'school', 'university', 'lesson', 'tutorial', 'python', 'programming'],
             'personal': ['feel', 'think', 'remember', 'dream', 'goal', 'plan', 'decision']
         }
         
@@ -206,7 +206,7 @@ class MemoryEngine:
             
             # Add to FAISS index
             faiss_index = self.index.ntotal
-            embedding_normalized = embedding / np.linalg.norm(embedding)  # Normalize for cosine similarity
+            embedding_normalized = embedding / np.linalg.norm(embedding)
             self.index.add(np.array([embedding_normalized], dtype=np.float32))
             
             # Save to PostgreSQL
@@ -245,11 +245,13 @@ class MemoryEngine:
             return str(memory_id)
             
         except Exception as e:
-            print(f"Error adding memory: {e}")
+            print(f"Error adding memory: {str(e)}")
+            import traceback
+            traceback.print_exc()  # This will show the full error
             return None
     
     def search_memories(self, query: str, user_id: str = "default", 
-                       limit: int = 10) -> List[Dict[str, Any]]:
+                    limit: int = 10) -> List[Dict[str, Any]]:
         """Search for similar memories using FAISS"""
         try:
             # Generate query embedding
@@ -259,24 +261,51 @@ class MemoryEngine:
             # Search FAISS index
             scores, indices = self.index.search(
                 np.array([query_normalized], dtype=np.float32), 
-                min(limit * 2, self.index.ntotal)  # Get more results to filter by user
+                min(limit * 3, self.index.ntotal)  # Get more results to filter
             )
             
-            # Filter results by user and format response
+            # Get results from PostgreSQL instead of metadata cache
+            conn = psycopg2.connect(**self.db_config)
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
             results = []
+            seen_ids = set()  # Track seen memory IDs
+            
             for score, idx in zip(scores[0], indices[0]):
                 if idx == -1:  # FAISS returns -1 for invalid indices
                     continue
                     
-                metadata = self.id_to_metadata.get(idx)
-                if metadata and metadata['user_id'] == user_id:
-                    result = metadata.copy()
-                    result['similarity_score'] = float(score)
-                    results.append(result)
+                # Get memory from database by faiss_index
+                cursor.execute("""
+                    SELECT id, content, entities, categories, emotions, importance, created_at
+                    FROM memories 
+                    WHERE user_id = %s AND faiss_index = %s
+                    LIMIT 1;
+                """, (user_id, int(idx)))
+                
+                memory_row = cursor.fetchone()
+                if memory_row:
+                    memory_dict = dict(memory_row)
+                    memory_id = str(memory_dict['id'])
                     
-                if len(results) >= limit:
-                    break
+                    # Skip if we've already seen this memory ID
+                    if memory_id in seen_ids:
+                        continue
+                        
+                    seen_ids.add(memory_id)
+                    
+                    # Convert datetime to string and add similarity score
+                    if memory_dict.get('created_at'):
+                        memory_dict['created_at'] = memory_dict['created_at'].isoformat()
+                    memory_dict['id'] = memory_id
+                    memory_dict['similarity_score'] = float(score)
+                    results.append(memory_dict)
+                    
+                    if len(results) >= limit:
+                        break
             
+            cursor.close()
+            conn.close()
             return results
             
         except Exception as e:

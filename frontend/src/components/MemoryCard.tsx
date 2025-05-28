@@ -81,7 +81,12 @@ export function MemoryCard({ memory, showSimilarity = false }: MemoryCardProps) 
           
           {/* Similarity score (for search results) */}
           {showSimilarity && memory.similarity_score && (
-            <div className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+            <div className={`text-xs px-2 py-1 rounded-full ${
+              memory.similarity_score >= 0.8 ? 'bg-green-100 text-green-700' :
+              memory.similarity_score >= 0.6 ? 'bg-yellow-100 text-yellow-700' :
+              memory.similarity_score >= 0.4 ? 'bg-orange-100 text-orange-700' :
+              'bg-red-100 text-red-700'
+            }`}>
               {Math.round(memory.similarity_score * 100)}% match
             </div>
           )}

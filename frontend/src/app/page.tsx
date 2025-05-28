@@ -31,6 +31,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchMode, setSearchMode] = useState(false);
+  const [directAnswer, setDirectAnswer] = useState<string>('');
 
   // Fetch recent memories on load
   useEffect(() => {
@@ -58,6 +59,7 @@ export default function Home() {
         const data = await response.json();
         setMemories(data);
         setSearchMode(false);
+        setDirectAnswer('');
       }
     } catch (error) {
       console.error('Error fetching memories:', error);
@@ -92,10 +94,13 @@ export default function Home() {
   const searchMemories = async (query: string) => {
     if (!query.trim()) {
       fetchRecentMemories();
+      setDirectAnswer('');
       return;
     }
 
     setLoading(true);
+    setDirectAnswer('');
+    
     try {
       const response = await fetch(`${API_BASE}/memories/search`, {
         method: 'POST',
@@ -111,8 +116,33 @@ export default function Home() {
 
       if (response.ok) {
         const data = await response.json();
-        setMemories(data);
+        console.log('Search results:', data); // Debug log
+        
+        // Remove duplicates by ID and filter out low similarity
+        const uniqueResults = data.filter((memory: Memory, index: number, self: Memory[]) => 
+          index === self.findIndex((m: Memory) => m.id === memory.id)
+        );
+        
+        const filteredData = uniqueResults.filter((memory: Memory) => 
+          !memory.similarity_score || memory.similarity_score >= 0.1
+        );
+        
+        console.log('Filtered results:', filteredData); // Debug log
+        
+        setMemories(filteredData);
         setSearchMode(true);
+
+        // Try to extract direct answer for question-like queries
+        if (query.toLowerCase().includes('when is') && filteredData.length > 0) {
+          const bestMatch = filteredData[0];
+          if (bestMatch.similarity_score && bestMatch.similarity_score > 0.8) {
+            // Extract date from the content
+            const dateMatch = bestMatch.content.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(th|st|nd|rd)?\b/i);
+            if (dateMatch) {
+              setDirectAnswer(`${dateMatch[0]}`);
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error searching memories:', error);
@@ -132,7 +162,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-light text-gray-900">
-              Memory Palace
+              Memorias
             </h1>
             <div className="flex items-center space-x-4 text-sm text-gray-500">
               <span>{memories.length} memories</span>
@@ -160,6 +190,19 @@ export default function Home() {
         <div className="mb-8">
           <SearchBar onSearch={searchMemories} loading={loading} />
         </div>
+
+        {/* Direct Answer */}
+        {directAnswer && (
+          <div className="mb-8 max-w-2xl mx-auto">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-center space-x-2 mb-2">
+                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                <span className="text-sm font-medium text-blue-800">Direct Answer</span>
+              </div>
+              <p className="text-lg text-blue-900 font-medium">{directAnswer}</p>
+            </div>
+          </div>
+        )}
 
         {/* Category Filter */}
         {categories.length > 0 && (
