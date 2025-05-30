@@ -15,9 +15,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 class MemoryEngine:
     def __init__(self, db_config: Dict[str, str]):
-        # Load AI models
+        # Load AI models - UPGRADED MODEL
         self.embedding_model = SentenceTransformer('all-mpnet-base-v2')
-        self.embedding_dim = 768  # Dimension of all-MiniLM-L6-v2
+        self.embedding_dim = 768  # Dimension of all-mpnet-base-v2
         
         try:
             self.nlp = spacy.load('en_core_web_sm')
@@ -52,16 +52,17 @@ class MemoryEngine:
             pickle.dump(self.id_to_metadata, f)
             
     def _init_database(self):
-        """Initialize PostgreSQL tables"""
+        """Initialize PostgreSQL tables - Updated for new auth system"""
         try:
             conn = psycopg2.connect(**self.db_config)
             cursor = conn.cursor()
             
-            # Create memories table
+            # Note: Main table creation is now handled by database.py
+            # This just ensures memories table exists with proper indexes
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS memories (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    user_id VARCHAR(100) NOT NULL,
+                    user_id UUID NOT NULL,
                     content TEXT NOT NULL,
                     entities JSONB,
                     categories JSONB,
@@ -73,11 +74,12 @@ class MemoryEngine:
                 );
             """)
             
-            # Create index for faster queries
+            # Create indexes for faster queries
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_memories_user_id ON memories(user_id);
                 CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance DESC);
                 CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_memories_faiss_index ON memories(faiss_index);
             """)
             
             conn.commit()
@@ -129,12 +131,12 @@ class MemoryEngine:
         
         return emotions
     
-    def categorize_memory(self, text: str, entities: List[str]) -> List[str]:
-        """Categorize memory based on content and entities"""
+    def categorize_memory(self, text: str, entities: List[str], user_pillars: List = None) -> List[str]:
+        """Categorize memory based on content, entities, and user pillars"""
         categories = []
         text_lower = text.lower()
         
-        # Define category keywords
+        # Define category keywords - ENHANCED VERSION
         category_keywords = {
             'work': ['work', 'job', 'office', 'meeting', 'project', 'colleague', 'boss', 'client', 'deadline', 'CEO', 'budget', 'expenses', 'team'],
             'family': ['mom', 'dad', 'sister', 'brother', 'family', 'parent', 'child', 'grandmother', 'grandfather', 'daughter', 'son', 'baby', 'emma', 'sarah'],
@@ -151,6 +153,15 @@ class MemoryEngine:
         for category, keywords in category_keywords.items():
             if any(keyword in text_lower for keyword in keywords):
                 categories.append(category)
+        
+        # Check user pillars for matches - NEW FEATURE
+        if user_pillars:
+            for pillar in user_pillars:
+                pillar_name_lower = pillar.name.lower()
+                # Check if pillar name appears in text or entities
+                if (pillar_name_lower in text_lower or 
+                    any(pillar_name_lower in entity.lower() for entity in entities)):
+                    categories.append(f"pillar_{pillar.category}_{pillar.name}")
                 
         # Entity-based categorization
         for entity in entities:
@@ -185,14 +196,17 @@ class MemoryEngine:
         important_categories = ['work', 'family', 'relationships', 'health']
         category_boost = 0.1 if any(cat in important_categories for cat in categories) else 0
         
+        # Pillar-related memories are more important
+        pillar_boost = 0.15 if any(cat.startswith('pillar_') for cat in categories) else 0
+        
         # Length factor (detailed memories might be more important)
         word_count = len(text.split())
         length_factor = min(word_count / 100, 0.1) if word_count > 10 else 0
         
-        importance = base_score + emotional_boost + emotion_boost + entity_boost + category_boost + length_factor
+        importance = base_score + emotional_boost + emotion_boost + entity_boost + category_boost + pillar_boost + length_factor
         return min(max(importance, 0.1), 1.0)  # Clamp between 0.1 and 1.0
     
-    def add_memory(self, text: str, user_id: str = "default") -> str:
+    def add_memory(self, text: str, user_id: str, user_pillars: List = None) -> str:
         """Add a new memory to the system"""
         try:
             # Generate embedding
@@ -201,12 +215,12 @@ class MemoryEngine:
             # Extract features
             entities = self.extract_entities(text)
             emotions = self.analyze_sentiment(text)
-            categories = self.categorize_memory(text, entities)
+            categories = self.categorize_memory(text, entities, user_pillars)
             importance = self.calculate_importance(text, emotions, entities, categories)
             
             # Add to FAISS index
             faiss_index = self.index.ntotal
-            embedding_normalized = embedding / np.linalg.norm(embedding)
+            embedding_normalized = embedding / np.linalg.norm(embedding)  # Normalize for cosine similarity
             self.index.add(np.array([embedding_normalized], dtype=np.float32))
             
             # Save to PostgreSQL
@@ -247,12 +261,11 @@ class MemoryEngine:
         except Exception as e:
             print(f"Error adding memory: {str(e)}")
             import traceback
-            traceback.print_exc()  # This will show the full error
+            traceback.print_exc()
             return None
     
-    def search_memories(self, query: str, user_id: str = "default", 
-                    limit: int = 10) -> List[Dict[str, Any]]:
-        """Search for similar memories using FAISS"""
+    def search_memories(self, query: str, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Search for similar memories using FAISS - Updated for new auth system"""
         try:
             # Generate query embedding
             query_embedding = self.embedding_model.encode([query])[0]
@@ -264,7 +277,7 @@ class MemoryEngine:
                 min(limit * 3, self.index.ntotal)  # Get more results to filter
             )
             
-            # Get results from PostgreSQL instead of metadata cache
+            # Get results from PostgreSQL instead of metadata cache (more reliable)
             conn = psycopg2.connect(**self.db_config)
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
@@ -312,7 +325,7 @@ class MemoryEngine:
             print(f"Error searching memories: {e}")
             return []
     
-    def get_recent_memories(self, user_id: str = "default", limit: int = 20) -> List[Dict[str, Any]]:
+    def get_recent_memories(self, user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Get recent memories for a user"""
         try:
             conn = psycopg2.connect(**self.db_config)
@@ -347,7 +360,7 @@ class MemoryEngine:
             print(f"Error getting recent memories: {e}")
             return []
     
-    def get_memory_clusters(self, user_id: str = "default") -> Dict[str, List[Dict[str, Any]]]:
+    def get_memory_clusters(self, user_id: str) -> Dict[str, List[Dict[str, Any]]]:
         """Get memories grouped by categories"""
         try:
             conn = psycopg2.connect(**self.db_config)

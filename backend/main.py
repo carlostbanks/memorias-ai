@@ -1,32 +1,21 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import os
+from datetime import timedelta
+from uuid import UUID
+
+# Import our modules
 from memory_engine import MemoryEngine
-
-# Pydantic models for API
-class MemoryRequest(BaseModel):
-    content: str
-    user_id: str = "default"
-
-class SearchRequest(BaseModel):
-    query: str
-    user_id: str = "default"
-    limit: int = 10
-
-class MemoryResponse(BaseModel):
-    id: str
-    content: str
-    entities: List[str]
-    categories: List[str]
-    emotions: Dict[str, float]
-    importance: float
-    created_at: str
-    similarity_score: Optional[float] = None
+from database import Database
+from auth import AuthService, get_current_user, get_current_user_optional
+from models import (
+    User, MemoryRequest, MemoryResponse, SearchRequest, Token, 
+    GoogleAuthRequest, OnboardingRequest, PillarCreate
+)
 
 # Initialize FastAPI app
-app = FastAPI(title="Memory Palace API", version="1.0.0")
+app = FastAPI(title="Memory Palace API", version="2.0.0")
 
 # CORS middleware for Next.js frontend
 app.add_middleware(
@@ -37,7 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Database configuration - update with your PostgreSQL settings
+# Database configuration
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
     "port": os.getenv("DB_PORT", "5432"),
@@ -46,84 +35,243 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD", "postgres")
 }
 
-# Initialize memory engine
+# Initialize services
 try:
+    database = Database(DB_CONFIG)
     memory_engine = MemoryEngine(DB_CONFIG)
+    auth_service = AuthService(database)
+    print("✅ Services initialized successfully")
 except Exception as e:
-    print(f"Failed to initialize memory engine: {e}")
+    print(f"❌ Failed to initialize services: {e}")
+    database = None
     memory_engine = None
+    auth_service = None
 
+# Dependency injection - Fixed for newer FastAPI
+def get_database():
+    if database is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    return database
+
+def get_memory_engine():
+    if memory_engine is None:
+        raise HTTPException(status_code=500, detail="Memory engine not initialized")
+    return memory_engine
+
+def get_auth_service():
+    if auth_service is None:
+        raise HTTPException(status_code=500, detail="Auth service not initialized")
+    return auth_service
+
+# Root endpoint
 @app.get("/")
 async def root():
-    return {"message": "Memory Palace API is running"}
+    return {"message": "Memory Palace API v2.0 is running"}
 
-@app.post("/memories", response_model=Dict[str, str])
-async def add_memory(request: MemoryRequest):
-    """Add a new memory"""
-    if not memory_engine:
-        raise HTTPException(status_code=500, detail="Memory engine not initialized")
+# Authentication endpoints
+@app.post("/auth/google", response_model=Token)
+async def google_auth(
+    request: GoogleAuthRequest,
+    auth_svc: AuthService = Depends(get_auth_service)
+):
+    """Authenticate with Google OAuth"""
+    user = auth_svc.authenticate_user(request.id_token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google token"
+        )
     
+    # Create access token
+    access_token = auth_svc.create_access_token(
+        data={"sub": str(user.id)}
+    )
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        user=user
+    )
+
+@app.get("/auth/me", response_model=User)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Get current user information"""
+    return current_user
+
+# Onboarding endpoints
+@app.post("/onboarding/pillars")
+async def save_user_pillars(
+    request: OnboardingRequest,
+    current_user: User = Depends(get_current_user),
+    db: Database = Depends(get_database)
+):
+    """Save user pillars during onboarding"""
     try:
-        memory_id = memory_engine.add_memory(request.content, request.user_id)
+        # Combine all pillars
+        all_pillars = []
+        
+        # Add people pillars
+        for person in request.people:
+            person.category = "people"
+            all_pillars.append(person)
+        
+        # Add interest pillars
+        for interest in request.interests:
+            interest.category = "interests"
+            all_pillars.append(interest)
+        
+        # Add life event pillars
+        for event in request.life_events:
+            event.category = "life_events"
+            all_pillars.append(event)
+        
+        # Save to database
+        created_pillars = db.create_pillars(current_user.id, all_pillars)
+        
+        return {
+            "message": "Pillars saved successfully",
+            "count": len(created_pillars)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving pillars: {str(e)}")
+
+@app.get("/pillars")
+async def get_user_pillars(
+    current_user: User = Depends(get_current_user),
+    db: Database = Depends(get_database)
+):
+    """Get user's pillars"""
+    try:
+        pillars = db.get_user_pillars(current_user.id)
+        
+        # Group by category
+        grouped_pillars = {
+            "people": [p for p in pillars if p.category == "people"],
+            "interests": [p for p in pillars if p.category == "interests"],
+            "life_events": [p for p in pillars if p.category == "life_events"]
+        }
+        
+        return grouped_pillars
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting pillars: {str(e)}")
+
+# Memory endpoints (updated with authentication)
+@app.post("/memories", response_model=Dict[str, str])
+async def add_memory(
+    request: MemoryRequest,
+    current_user: User = Depends(get_current_user),
+    memory_engine: MemoryEngine = Depends(get_memory_engine),
+    db: Database = Depends(get_database)
+):
+    """Add a new memory"""
+    try:
+        # Get user pillars for enhanced categorization
+        user_pillars = db.get_user_pillars(current_user.id)
+        
+        # Add memory with user context
+        memory_id = memory_engine.add_memory(
+            text=request.content,
+            user_id=str(current_user.id),
+            user_pillars=user_pillars
+        )
+        
         if memory_id:
             return {"id": memory_id, "message": "Memory added successfully"}
         else:
             raise HTTPException(status_code=500, detail="Failed to add memory")
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error adding memory: {str(e)}")
 
 @app.post("/memories/search", response_model=List[MemoryResponse])
-async def search_memories(request: SearchRequest):
+async def search_memories(
+    request: SearchRequest,
+    current_user: User = Depends(get_current_user),
+    memory_engine: MemoryEngine = Depends(get_memory_engine)
+):
     """Search for similar memories"""
-    if not memory_engine:
-        raise HTTPException(status_code=500, detail="Memory engine not initialized")
-    
     try:
         results = memory_engine.search_memories(
-            request.query, 
-            request.user_id, 
-            request.limit
+            query=request.query,
+            user_id=str(current_user.id),
+            limit=request.limit
         )
         return results
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error searching memories: {str(e)}")
 
 @app.get("/memories/recent", response_model=List[MemoryResponse])
-async def get_recent_memories(user_id: str = "default", limit: int = 20):
-    """Get recent memories for a user"""
-    if not memory_engine:
-        raise HTTPException(status_code=500, detail="Memory engine not initialized")
-    
+async def get_recent_memories(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    memory_engine: MemoryEngine = Depends(get_memory_engine)
+):
+    """Get recent memories for current user"""
     try:
-        memories = memory_engine.get_recent_memories(user_id, limit)
+        memories = memory_engine.get_recent_memories(
+            user_id=str(current_user.id),
+            limit=limit
+        )
         return memories
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting recent memories: {str(e)}")
 
 @app.get("/memories/clusters", response_model=Dict[str, List[MemoryResponse]])
-async def get_memory_clusters(user_id: str = "default"):
+async def get_memory_clusters(
+    current_user: User = Depends(get_current_user),
+    memory_engine: MemoryEngine = Depends(get_memory_engine)
+):
     """Get memories grouped by categories"""
-    if not memory_engine:
-        raise HTTPException(status_code=500, detail="Memory engine not initialized")
-    
     try:
-        clusters = memory_engine.get_memory_clusters(user_id)
+        clusters = memory_engine.get_memory_clusters(str(current_user.id))
         return clusters
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting memory clusters: {str(e)}")
 
+@app.get("/memories/calendar")
+async def get_memory_calendar(
+    year: int,
+    month: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    memory_engine: MemoryEngine = Depends(get_memory_engine)
+):
+    """Get memory counts by date for calendar heat map"""
+    try:
+        # This will be implemented when we add the calendar feature
+        # For now, return placeholder data
+        return {
+            "year": year,
+            "month": month,
+            "data": {},
+            "message": "Calendar data endpoint - to be implemented"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting calendar data: {str(e)}")
+
+# Health check
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "memory_engine": "initialized" if memory_engine else "failed",
+        "version": "2.0.0",
+        "services": {
+            "database": "initialized" if database else "failed",
+            "memory_engine": "initialized" if memory_engine else "failed",
+            "auth_service": "initialized" if auth_service else "failed"
+        },
         "total_memories": memory_engine.index.ntotal if memory_engine else 0
     }
 
 if __name__ == "__main__":
     import uvicorn
-    print("Starting FastAPI server...")
+    print("Starting Memory Palace API v2.0...")
     try:
         uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
     except Exception as e:
