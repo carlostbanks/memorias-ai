@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
@@ -10,7 +13,7 @@ from memory_engine import MemoryEngine
 from database import Database
 from auth import AuthService, get_current_user, get_current_user_optional
 from models import (
-    User, MemoryRequest, MemoryResponse, SearchRequest, Token, 
+    NextAuthRequest, User, MemoryRequest, MemoryResponse, SearchRequest, Token, 
     GoogleAuthRequest, OnboardingRequest, PillarCreate
 )
 
@@ -93,6 +96,51 @@ async def google_auth(
         user=user
     )
 
+@app.post("/auth/nextauth", response_model=Token)
+async def nextauth_login(
+    request: NextAuthRequest,
+    auth_svc: AuthService = Depends(get_auth_service)
+):
+    """Authenticate with NextAuth session data"""
+    try:
+        # Check if user exists by email
+        user = auth_svc.db.get_user_by_email(request.email)
+        
+        if not user:
+            # Create new user from NextAuth data
+            from models import UserCreate
+            user_data = UserCreate(
+                email=request.email,
+                name=request.name,
+                google_id=request.google_id,
+                avatar_url=request.avatar_url
+            )
+            user = auth_svc.db.create_user(user_data)
+            
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Failed to create or find user"
+            )
+        
+        # Create access token
+        access_token = auth_svc.create_access_token(
+            data={"sub": str(user.id)}
+        )
+        
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            user=user
+        )
+        
+    except Exception as e:
+        print(f"NextAuth authentication error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed"
+        )
+
 @app.get("/auth/me", response_model=User)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
@@ -107,26 +155,32 @@ async def save_user_pillars(
 ):
     """Save user pillars during onboarding"""
     try:
-        # Combine all pillars
+        print(f"Received pillars data: {request}")  # Debug log
+        
+        # Combine all pillars and set categories
         all_pillars = []
         
         # Add people pillars
         for person in request.people:
-            person.category = "people"
-            all_pillars.append(person)
+            pillar = PillarCreate(name=person.name, category="people", avatar_url=person.avatar_url)
+            all_pillars.append(pillar)
         
         # Add interest pillars
         for interest in request.interests:
-            interest.category = "interests"
-            all_pillars.append(interest)
+            pillar = PillarCreate(name=interest.name, category="interests", avatar_url=interest.avatar_url)
+            all_pillars.append(pillar)
         
         # Add life event pillars
         for event in request.life_events:
-            event.category = "life_events"
-            all_pillars.append(event)
+            pillar = PillarCreate(name=event.name, category="life_events", avatar_url=event.avatar_url)
+            all_pillars.append(pillar)
+        
+        print(f"Created {len(all_pillars)} pillars to save")  # Debug log
         
         # Save to database
         created_pillars = db.create_pillars(current_user.id, all_pillars)
+        
+        print(f"Successfully saved {len(created_pillars)} pillars")  # Debug log
         
         return {
             "message": "Pillars saved successfully",
@@ -134,6 +188,9 @@ async def save_user_pillars(
         }
         
     except Exception as e:
+        print(f"Error saving pillars: {e}")  # Debug log
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error saving pillars: {str(e)}")
 
 @app.get("/pillars")
@@ -253,6 +310,24 @@ async def get_memory_calendar(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting calendar data: {str(e)}")
+
+@app.get("/onboarding/status")
+async def check_onboarding_status(
+    current_user: User = Depends(get_current_user),
+    db: Database = Depends(get_database)
+):
+    """Check if user has completed onboarding"""
+    try:
+        pillars = db.get_user_pillars(current_user.id)
+        has_completed_onboarding = len(pillars) > 0
+        
+        return {
+            "completed": has_completed_onboarding,
+            "pillar_count": len(pillars)
+        }
+        
+    except Exception as e:
+        return {"completed": False, "pillar_count": 0}
 
 # Health check
 @app.get("/health")

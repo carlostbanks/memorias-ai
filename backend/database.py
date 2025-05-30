@@ -195,6 +195,28 @@ class Database:
         except Exception as e:
             print(f"Error creating pillars: {e}")
             return []
+        
+    def get_user_by_email(self, email: str) -> Optional[User]:
+        """Get user by email"""
+        try:
+            conn = psycopg2.connect(**self.db_config)
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cursor.execute("""
+                SELECT id, email, name, google_id, avatar_url, created_at
+                FROM users WHERE email = %s;
+            """, (email,))
+            
+            user_row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if user_row:
+                return User(**dict(user_row))
+            
+        except Exception as e:
+            print(f"Error getting user by email: {e}")
+            return None
     
     def get_user_pillars(self, user_id: UUID) -> List[Pillar]:
         """Get all pillars for a user"""

@@ -23,8 +23,8 @@ class UserInDB(User):
 
 # Pillar models
 class PillarCreate(BaseModel):
-    category: str  # 'people', 'interests', 'life_events'
     name: str
+    category: Optional[str] = None  # Make category optional
     avatar_url: Optional[str] = None
 
 class Pillar(BaseModel):
@@ -69,3 +69,9 @@ class OnboardingRequest(BaseModel):
     people: List[PillarCreate]
     interests: List[PillarCreate]
     life_events: List[PillarCreate]
+
+class NextAuthRequest(BaseModel):
+    email: str
+    name: str
+    google_id: str
+    avatar_url: Optional[str] = None

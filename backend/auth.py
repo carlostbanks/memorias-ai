@@ -77,10 +77,14 @@ class AuthService:
         if not google_data:
             return None
         
+        print(f"Google data: {google_data}")  # Debug log
+        
         # Check if user exists
         user = self.db.get_user_by_google_id(google_data['google_id'])
+        print(f"Found existing user: {user}")  # Debug log
         
         if not user:
+            print("Creating new user...")  # Debug log
             # Create new user
             from models import UserCreate
             user_data = UserCreate(
@@ -90,6 +94,7 @@ class AuthService:
                 avatar_url=google_data['avatar_url']
             )
             user = self.db.create_user(user_data)
+            print(f"Created user: {user}")  # Debug log
         
         return user
 
