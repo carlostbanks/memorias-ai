@@ -1,12 +1,14 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import Form, UploadFile, File, FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 import os
 from datetime import timedelta
 from uuid import UUID
+import cloudinary
+import cloudinary.uploader
 
 # Import our modules
 from memory_engine import MemoryEngine
@@ -27,6 +29,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
 )
 
 # Database configuration
@@ -214,24 +222,99 @@ async def get_user_pillars(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting pillars: {str(e)}")
 
+@app.post("/upload/photo")
+async def upload_photo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload a photo to Cloudinary"""
+    try:
+        # Validate file type
+        if not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
+        
+        # Upload to Cloudinary
+        result = cloudinary.uploader.upload(
+            file.file,
+            folder=f"memoria/{current_user.id}",
+            resource_type="image",
+            transformation=[
+                {"width": 1200, "height": 1200, "crop": "limit"},
+                {"quality": "auto:good"}
+            ]
+        )
+        
+        return {
+            "url": result["secure_url"],
+            "public_id": result["public_id"],
+            "width": result.get("width"),
+            "height": result.get("height"),
+            "format": result.get("format"),
+            "bytes": result.get("bytes")
+        }
+        
+    except Exception as e:
+        print(f"Photo upload error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload photo")
+
+
 # Memory endpoints (updated with authentication)
 @app.post("/memories", response_model=Dict[str, str])
 async def add_memory(
-    request: MemoryRequest,
+    content: str = Form(""),
+    photos: List[UploadFile] = File(default=[]),
     current_user: User = Depends(get_current_user),
     memory_engine: MemoryEngine = Depends(get_memory_engine),
     db: Database = Depends(get_database)
 ):
-    """Add a new memory"""
+    """Add a new memory with optional photos"""
     try:
+        if not content.strip() and not photos:
+            raise HTTPException(status_code=400, detail="Memory must have content or photos")
+        
+        # Upload photos to Cloudinary
+        photo_data = []
+        for photo in photos:
+            if photo.filename:  # Skip empty uploads
+                try:
+                    # Validate file type
+                    if not photo.content_type.startswith('image/'):
+                        continue  # Skip non-image files
+                    
+                    # Upload to Cloudinary
+                    result = cloudinary.uploader.upload(
+                        photo.file,
+                        folder=f"memoria/{current_user.id}",
+                        resource_type="image",
+                        transformation=[
+                            {"width": 1200, "height": 1200, "crop": "limit"},
+                            {"quality": "auto:good"}
+                        ]
+                    )
+                    
+                    photo_data.append({
+                        "url": result["secure_url"],
+                        "public_id": result["public_id"],
+                        "metadata": {
+                            "width": result.get("width"),
+                            "height": result.get("height"),
+                            "format": result.get("format"),
+                            "bytes": result.get("bytes")
+                        }
+                    })
+                except Exception as photo_error:
+                    print(f"Error uploading photo: {photo_error}")
+                    continue  # Skip this photo but continue with others
+        
         # Get user pillars for enhanced categorization
         user_pillars = db.get_user_pillars(current_user.id)
         
-        # Add memory with user context
+        # Add memory with user context and photos
         memory_id = memory_engine.add_memory(
-            text=request.content,
+            text=content.strip() if content.strip() else "[Photo memory]",
             user_id=str(current_user.id),
-            user_pillars=user_pillars
+            user_pillars=user_pillars,
+            photos=photo_data
         )
         
         if memory_id:
@@ -240,6 +323,9 @@ async def add_memory(
             raise HTTPException(status_code=500, detail="Failed to add memory")
             
     except Exception as e:
+        print(f"Error adding memory with photos: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error adding memory: {str(e)}")
 
 @app.post("/memories/search", response_model=List[MemoryResponse])

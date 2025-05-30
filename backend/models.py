@@ -38,7 +38,7 @@ class Pillar(BaseModel):
 # Memory models (updated)
 class MemoryRequest(BaseModel):
     content: str
-    photos: Optional[List[str]] = []  # List of base64 encoded images
+    photos: Optional[List[Dict[str, Any]]] = []
 
 class MemoryResponse(BaseModel):
     id: UUID
@@ -48,8 +48,14 @@ class MemoryResponse(BaseModel):
     emotions: Dict[str, float]
     importance: float
     created_at: datetime
-    photos: Optional[List[Dict[str, Any]]] = []
+    photos: Optional[List[Dict[str, Any]]] = []  # Photo URLs and metadata
     similarity_score: Optional[float] = None
+
+# Photo models
+class PhotoUpload(BaseModel):
+    url: str
+    public_id: str
+    metadata: Optional[Dict[str, Any]] = None
 
 # Search models
 class SearchRequest(BaseModel):

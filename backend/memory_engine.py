@@ -206,8 +206,8 @@ class MemoryEngine:
         importance = base_score + emotional_boost + emotion_boost + entity_boost + category_boost + pillar_boost + length_factor
         return min(max(importance, 0.1), 1.0)  # Clamp between 0.1 and 1.0
     
-    def add_memory(self, text: str, user_id: str, user_pillars: List = None) -> str:
-        """Add a new memory to the system"""
+    def add_memory(self, text: str, user_id: str, user_pillars: List = None, photos: List = None) -> str:
+        """Add a new memory to the system with optional photos"""
         try:
             # Generate embedding
             embedding = self.embedding_model.encode([text])[0]
@@ -237,6 +237,20 @@ class MemoryEngine:
             ))
             
             memory_id = cursor.fetchone()[0]
+            
+            # Save photos to memory_photos table if provided
+            if photos:
+                for photo in photos:
+                    cursor.execute("""
+                        INSERT INTO memory_photos (memory_id, cloudinary_url, original_filename, metadata)
+                        VALUES (%s, %s, %s, %s);
+                    """, (
+                        str(memory_id), 
+                        photo.get('url'), 
+                        photo.get('public_id'), 
+                        json.dumps(photo.get('metadata', {}))
+                    ))
+            
             conn.commit()
             cursor.close()
             conn.close()
@@ -250,7 +264,8 @@ class MemoryEngine:
                 'categories': categories,
                 'emotions': emotions,
                 'importance': importance,
-                'created_at': datetime.now().isoformat()
+                'created_at': datetime.now().isoformat(),
+                'photos': photos or []
             }
             
             # Save index
@@ -265,7 +280,7 @@ class MemoryEngine:
             return None
     
     def search_memories(self, query: str, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Search for similar memories using FAISS - Updated for new auth system"""
+        """Search for similar memories using FAISS with photos"""
         try:
             # Generate query embedding
             query_embedding = self.embedding_model.encode([query])[0]
@@ -277,7 +292,7 @@ class MemoryEngine:
                 min(limit * 3, self.index.ntotal)  # Get more results to filter
             )
             
-            # Get results from PostgreSQL instead of metadata cache (more reliable)
+            # Get results from PostgreSQL with photos
             conn = psycopg2.connect(**self.db_config)
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
@@ -288,11 +303,23 @@ class MemoryEngine:
                 if idx == -1:  # FAISS returns -1 for invalid indices
                     continue
                     
-                # Get memory from database by faiss_index
+                # Get memory from database by faiss_index with photos
                 cursor.execute("""
-                    SELECT id, content, entities, categories, emotions, importance, created_at
-                    FROM memories 
-                    WHERE user_id = %s AND faiss_index = %s
+                    SELECT m.id, m.content, m.entities, m.categories, m.emotions, m.importance, m.created_at,
+                        COALESCE(
+                            json_agg(
+                                json_build_object(
+                                    'url', mp.cloudinary_url,
+                                    'public_id', mp.original_filename,
+                                    'metadata', mp.metadata
+                                )
+                            ) FILTER (WHERE mp.id IS NOT NULL), 
+                            '[]'::json
+                        ) as photos
+                    FROM memories m
+                    LEFT JOIN memory_photos mp ON m.id = mp.memory_id
+                    WHERE m.user_id = %s AND m.faiss_index = %s
+                    GROUP BY m.id, m.content, m.entities, m.categories, m.emotions, m.importance, m.created_at
                     LIMIT 1;
                 """, (user_id, int(idx)))
                 
@@ -326,16 +353,28 @@ class MemoryEngine:
             return []
     
     def get_recent_memories(self, user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
-        """Get recent memories for a user"""
+        """Get recent memories for a user with photos"""
         try:
             conn = psycopg2.connect(**self.db_config)
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
             cursor.execute("""
-                SELECT id, content, entities, categories, emotions, importance, created_at
-                FROM memories 
-                WHERE user_id = %s 
-                ORDER BY created_at DESC 
+                SELECT m.id, m.content, m.entities, m.categories, m.emotions, m.importance, m.created_at,
+                    COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'url', mp.cloudinary_url,
+                                'public_id', mp.original_filename,
+                                'metadata', mp.metadata
+                            )
+                        ) FILTER (WHERE mp.id IS NOT NULL), 
+                        '[]'::json
+                    ) as photos
+                FROM memories m
+                LEFT JOIN memory_photos mp ON m.id = mp.memory_id
+                WHERE m.user_id = %s 
+                GROUP BY m.id, m.content, m.entities, m.categories, m.emotions, m.importance, m.created_at
+                ORDER BY m.created_at DESC 
                 LIMIT %s;
             """, (user_id, limit))
             
