@@ -48,10 +48,14 @@ export function NavbarSearch({ onSearch, onResultClick, loading }: NavbarSearchP
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
-
+  
     try {
       const searchResults = await onSearch(query);
-      setResults(searchResults);
+      // Filter out low-quality results on frontend too
+      const qualityResults = searchResults.filter(memory => 
+        !memory.similarity_score || memory.similarity_score >= 0.25
+      );
+      setResults(qualityResults);
       setIsOpen(true);
     } catch (error) {
       console.error('Search error:', error);

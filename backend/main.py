@@ -257,6 +257,10 @@ async def upload_photo(
         print(f"Photo upload error: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload photo")
 
+# Test Vision API on startup
+if memory_engine:
+    print("Testing Google Vision API...")
+    memory_engine.test_vision_api()
 
 # Memory endpoints (updated with authentication)
 @app.post("/memories", response_model=Dict[str, str])
@@ -311,7 +315,7 @@ async def add_memory(
         
         # Add memory with user context and photos
         memory_id = memory_engine.add_memory(
-            text=content.strip() if content.strip() else "[Photo memory]",
+            text=content.strip(),
             user_id=str(current_user.id),
             user_pillars=user_pillars,
             photos=photo_data
