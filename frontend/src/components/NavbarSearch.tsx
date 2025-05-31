@@ -91,7 +91,7 @@ export function NavbarSearch({ onSearch, onResultClick, loading }: NavbarSearchP
   };
 
   return (
-    <div ref={searchRef} className="relative flex-1 max-w-md mx-8">
+    <div ref={searchRef} className="relative w-full">
       <form onSubmit={handleSubmit}>
         <div className="relative">
           {/* Search icon */}
@@ -161,17 +161,17 @@ export function NavbarSearch({ onSearch, onResultClick, loading }: NavbarSearchP
             <button
               key={memory.id}
               onClick={() => handleResultClick(memory)}
-              className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
+              className="w-full px-3 sm:px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
             >
               <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900 line-clamp-2">
-                    {truncateText(memory.content)}
+                <div className="flex-1 min-w-0 pr-2">
+                  <p className="text-sm text-gray-900 line-clamp-2 break-words">
+                    {truncateText(memory.content, 60)}
                   </p>
                   
                   {/* Categories */}
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {memory.categories.slice(0, 3).map((category, index) => (
+                    {memory.categories.slice(0, 2).map((category, index) => (
                       <span
                         key={index}
                         className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded"
@@ -179,15 +179,15 @@ export function NavbarSearch({ onSearch, onResultClick, loading }: NavbarSearchP
                         {category}
                       </span>
                     ))}
-                    {memory.categories.length > 3 && (
+                    {memory.categories.length > 2 && (
                       <span className="text-xs text-gray-500">
-                        +{memory.categories.length - 3}
+                        +{memory.categories.length - 2}
                       </span>
                     )}
                   </div>
                 </div>
                 
-                <div className="flex flex-col items-end ml-3 flex-shrink-0">
+                <div className="flex flex-col items-end flex-shrink-0">
                   {/* Similarity score */}
                   {memory.similarity_score && (
                     <div className={`text-xs px-1.5 py-0.5 rounded mb-1 ${
@@ -201,7 +201,8 @@ export function NavbarSearch({ onSearch, onResultClick, loading }: NavbarSearchP
                   
                   {/* Date and arrow */}
                   <div className="flex items-center text-xs text-gray-500">
-                    <span>{formatDate(memory.created_at)}</span>
+                    <span className="hidden sm:inline">{formatDate(memory.created_at)}</span>
+                    <span className="sm:hidden">{formatDate(memory.created_at).split(' ').slice(0, 2).join(' ')}</span>
                     <svg className="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>

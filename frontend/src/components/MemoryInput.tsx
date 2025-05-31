@@ -84,26 +84,26 @@ export function MemoryInput({ onSubmit, loading }: MemoryInputProps) {
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Tell me something to remember..."
-              className="w-full px-6 py-4 text-lg text-gray-900 placeholder-gray-500 border-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-gray-50/50 hover:bg-gray-50/80 transition-colors"
+              className="w-full px-4 sm:px-6 py-4 text-base sm:text-lg text-gray-900 placeholder-gray-500 border-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-gray-50/50 hover:bg-gray-50/80 transition-colors"
               rows={3}
               disabled={loading}
             />
             
             {/* Photo Previews */}
             {photos.length > 0 && (
-              <div className="px-6 pb-4">
+              <div className="px-4 sm:px-6 pb-4">
                 <div className="flex flex-wrap gap-2">
                   {photos.map((photo, index) => (
                     <div key={index} className="relative">
                       <img
                         src={URL.createObjectURL(photo)}
                         alt={`Preview ${index + 1}`}
-                        className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                        className="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded-lg border border-gray-200"
                       />
                       <button
                         type="button"
                         onClick={() => removePhoto(index)}
-                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 transition-colors flex items-center justify-center"
+                        className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 transition-colors flex items-center justify-center"
                       >
                         ×
                       </button>
@@ -114,23 +114,24 @@ export function MemoryInput({ onSubmit, loading }: MemoryInputProps) {
             )}
             
             {/* Bottom Bar */}
-            <div className="flex items-center justify-between px-6 pb-3">
-              <div className="flex items-center space-x-4">
+            <div className="flex items-center justify-between px-4 sm:px-6 pb-3">
+              <div className="flex items-center space-x-2 sm:space-x-4">
                 {/* Photo Upload Button */}
                 <button
                   type="button"
                   onClick={triggerFileInput}
                   disabled={loading || photos.length >= 5}
-                  className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1.5 text-xs sm:text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  <span>Add Photo</span>
+                  <span className="hidden sm:inline">Add Photo</span>
+                  <span className="sm:hidden">📷</span>
                 </button>
                 
-                {/* Character count */}
-                <div className="text-xs text-gray-400">
+                {/* Character count - hide on mobile */}
+                <div className="hidden sm:block text-xs text-gray-400">
                   {content.length} characters
                 </div>
                 
@@ -145,15 +146,15 @@ export function MemoryInput({ onSubmit, loading }: MemoryInputProps) {
               <button
                 type="submit"
                 disabled={(!content.trim() && photos.length === 0) || loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm font-medium"
               >
                 {loading ? (
                   <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Saving...</span>
+                    <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white"></div>
+                    <span className="hidden sm:inline">Saving...</span>
                   </div>
                 ) : (
-                  'Remember'
+                  <span>Remember</span>
                 )}
               </button>
             </div>
@@ -163,10 +164,10 @@ export function MemoryInput({ onSubmit, loading }: MemoryInputProps) {
           {dragActive && (
             <div className="absolute inset-0 bg-blue-50/80 border-2 border-blue-400 border-dashed rounded-2xl flex items-center justify-center">
               <div className="text-center">
-                <svg className="mx-auto h-8 w-8 text-blue-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="mx-auto h-6 w-6 sm:h-8 sm:w-8 text-blue-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                <p className="text-blue-600 font-medium">Drop photos here</p>
+                <p className="text-blue-600 font-medium text-sm sm:text-base">Drop photos here</p>
               </div>
             </div>
           )}
@@ -183,12 +184,12 @@ export function MemoryInput({ onSubmit, loading }: MemoryInputProps) {
         />
       </form>
       
-      {/* Hint text */}
-      <p className="mt-3 text-sm text-gray-500 text-center">
-        Share a thought, experience, or photo you'd like to remember. 
-        <span className="hidden sm:inline"> Press Enter to save, Shift+Enter for new line.</span>
-        <br />
-        <span className="text-xs text-gray-400">
+      {/* Hint text - simplified for mobile */}
+      <p className="mt-3 text-xs sm:text-sm text-gray-500 text-center">
+        <span className="sm:hidden">Share a thought or photo to remember</span>
+        <span className="hidden sm:inline">Share a thought, experience, or photo you'd like to remember. Press Enter to save, Shift+Enter for new line.</span>
+        <br className="hidden sm:block" />
+        <span className="text-xs text-gray-400 hidden sm:inline">
           You can drag & drop photos or click "Add Photo". Max 5 photos, 10MB each.
         </span>
       </p>

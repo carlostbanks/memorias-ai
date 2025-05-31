@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedDayMemories, setSelectedDayMemories] = useState<Memory[]>([]);
   const [preSelectedMemory, setPreSelectedMemory] = useState<Memory | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Check authentication
   useEffect(() => {
@@ -187,37 +188,69 @@ export default function Dashboard() {
     <div className="min-h-screen bg-white">
       {/* Header with Search */}
       <header className="border-b border-gray-100 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-light text-gray-900">
+            <h1 className="text-xl sm:text-2xl font-light text-gray-900">
               Memory Palace
             </h1>
             
-            {/* Search Component */}
+            {/* Desktop Search */}
+            <div className="hidden md:block flex-1 max-w-md mx-8">
+              <NavbarSearch
+                onSearch={searchMemories}
+                onResultClick={handleMemoryClick}
+                loading={searchLoading}
+              />
+            </div>
+            
+            {/* Desktop User Info */}
+            <div className="hidden md:flex items-center space-x-4 text-sm text-gray-500">
+              <span>{memories.length} memories</span>
+              <span>{session?.user?.name}</span>
+              <button
+                onClick={handleSignOut}
+                className="text-red-600 hover:text-red-800 transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={mobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+              </svg>
+            </button>
+          </div>
+
+          {/* Mobile Search */}
+          <div className="md:hidden mt-4">
             <NavbarSearch
               onSearch={searchMemories}
               onResultClick={handleMemoryClick}
               loading={searchLoading}
             />
-            
-            <div className="flex items-center space-x-4 text-sm text-gray-500">
-              <span>{memories.length} memories</span>
-              <div className="flex items-center space-x-2">
-                <img 
-                  src={session?.user?.image || ''} 
-                  alt="Profile" 
-                  className="w-6 h-6 rounded-full"
-                />
-                <span>{session?.user?.name}</span>
+          </div>
+
+          {/* Mobile Menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden mt-4 py-4 border-t border-gray-100">
+              <div className="flex flex-col space-y-3">
+                <div className="text-sm text-gray-500">
+                  {memories.length} memories
+                </div>
                 <button
                   onClick={handleSignOut}
-                  className="text-red-600 hover:text-red-800 transition-colors ml-2"
+                  className="text-left text-red-600 hover:text-red-800 transition-colors text-sm"
                 >
                   Sign Out
                 </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </header>
 

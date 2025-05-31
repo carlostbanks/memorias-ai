@@ -233,9 +233,12 @@ export function DayModal({ isOpen, onClose, date, memories, preSelectedMemory }:
                             src={photo.url}
                             alt={`Memory photo ${index + 1}`}
                             className="w-full h-32 object-cover rounded-lg border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
-                            onClick={() => window.open(photo.url, '_blank')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(photo.url, '_blank');
+                            }}
                           />
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity rounded-lg flex items-center justify-center">
+                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity rounded-lg flex items-center justify-center pointer-events-none">
                             <svg className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
