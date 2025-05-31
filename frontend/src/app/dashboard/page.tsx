@@ -1,5 +1,3 @@
-// FILE: frontend/src/app/dashboard/page.tsx
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -46,7 +44,6 @@ export default function Dashboard() {
       router.push('/auth/signin');
       return;
     }
-    // Fetch memories once authenticated
     fetchRecentMemories();
   }, [session, status, router]);
 
@@ -85,7 +82,6 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append('content', content);
       
-      // Add photos to form data
       if (photos && photos.length > 0) {
         photos.forEach((photo) => {
           formData.append('photos', photo);
@@ -101,7 +97,6 @@ export default function Dashboard() {
       });
 
       if (response.ok) {
-        // Refresh memories list
         await fetchRecentMemories();
       } else if (response.status === 401) {
         router.push('/auth/signin');
@@ -144,28 +139,22 @@ export default function Dashboard() {
   };
 
   const handleMemoryClick = (memory: Memory) => {
-    // Get the date of this memory
     const memoryDate = new Date(memory.created_at);
-    
-    // Get all memories for that day
     const dayMemories = memories.filter(m => {
       const mDate = new Date(m.created_at);
       return mDate.toDateString() === memoryDate.toDateString();
     });
     
-    // Open the modal with this day and pre-select the memory
     setSelectedDate(memoryDate);
     setSelectedDayMemories(dayMemories);
     setModalOpen(true);
-    
-    // Set the specific memory as selected
     setPreSelectedMemory(memory);
   };
 
   const handleDayClick = (date: Date, memories: Memory[]) => {
     setSelectedDate(date);
     setSelectedDayMemories(memories);
-    setPreSelectedMemory(null); // Clear any pre-selection
+    setPreSelectedMemory(null);
     setModalOpen(true);
   };
 
@@ -209,7 +198,7 @@ export default function Dashboard() {
               <span>{session?.user?.name}</span>
               <button
                 onClick={handleSignOut}
-                className="text-red-600 hover:text-red-800 transition-colors"
+                className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
               >
                 Sign Out
               </button>
@@ -234,24 +223,26 @@ export default function Dashboard() {
               loading={searchLoading}
             />
           </div>
+        </div>
 
-          {/* Mobile Menu */}
-          {mobileMenuOpen && (
-            <div className="md:hidden mt-4 py-4 border-t border-gray-100">
-              <div className="flex flex-col space-y-3">
+        {/* Mobile Menu Overlay */}
+        {mobileMenuOpen && (
+          <div className="md:hidden fixed inset-0 top-16 bg-black bg-opacity-50 z-40">
+            <div className="bg-white shadow-lg border-b border-gray-100 p-4">
+              <div className="flex flex-col space-y-4">
                 <div className="text-sm text-gray-500">
                   {memories.length} memories
                 </div>
                 <button
                   onClick={handleSignOut}
-                  className="text-left text-red-600 hover:text-red-800 transition-colors text-sm"
+                  className="text-left px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
                 >
                   Sign Out
                 </button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
@@ -270,12 +261,22 @@ export default function Dashboard() {
         </div>
       </main>
 
+      {/* Footer */}
+      <footer className="border-t border-gray-100 bg-white py-8">
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <p className="text-sm text-gray-500">
+            Made with ❤️ in Miami
+          </p>
+        </div>
+      </footer>
+
       {/* Day Modal */}
       <DayModal
         isOpen={modalOpen}
         onClose={() => {
           setModalOpen(false);
           setPreSelectedMemory(null);
+          setMobileMenuOpen(false); // Close mobile menu when modal opens
         }}
         date={selectedDate}
         memories={selectedDayMemories}

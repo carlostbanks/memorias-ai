@@ -39,34 +39,6 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Get the first day of the month and days in month
-  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-  const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-  const daysInMonth = lastDayOfMonth.getDate();
-  const startingDayOfWeek = firstDayOfMonth.getDay(); // 0 = Sunday
-
-  // Month names
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
-  // Day names
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-  // Navigate months
-  const previousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  };
-
-  const nextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
-
   // Get memories for a specific date
   const getMemoriesForDate = (date: Date): Memory[] => {
     const dateString = date.toDateString();
@@ -76,9 +48,37 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
     });
   };
 
-  // Get heat map intensity for a date (placeholder - will implement later)
+  // Navigate months/weeks - FIXED FOR MOBILE
+  const previousPeriod = () => {
+    if (isMobile) {
+      // Move back 2 weeks
+      const newDate = new Date(currentDate);
+      newDate.setDate(currentDate.getDate() - 14);
+      setCurrentDate(newDate);
+    } else {
+      // Move back 1 month
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    }
+  };
+
+  const nextPeriod = () => {
+    if (isMobile) {
+      // Move forward 2 weeks
+      const newDate = new Date(currentDate);
+      newDate.setDate(currentDate.getDate() + 14);
+      setCurrentDate(newDate);
+    } else {
+      // Move forward 1 month
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    }
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  // Get heat map intensity
   const getHeatMapIntensity = (memoriesCount: number): string => {
-    // For now, just return basic styling
     if (memoriesCount === 0) return 'bg-gray-50 hover:bg-gray-100';
     if (memoriesCount === 1) return 'bg-purple-100 hover:bg-purple-200';
     if (memoriesCount <= 3) return 'bg-purple-200 hover:bg-purple-300';
@@ -86,32 +86,23 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
     return 'bg-purple-400 hover:bg-purple-500';
   };
 
-  // Handle day click (updated for mobile)
-  const handleDayClick = (day: number | Date) => {
-    let clickedDate: Date;
-    
-    if (day instanceof Date) {
-      clickedDate = day;
-    } else {
-      clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    }
-    
-    const dayMemories = getMemoriesForDate(clickedDate);
-    onDayClick(clickedDate, dayMemories);
+  // Handle day click - FIXED
+  const handleDayClick = (date: Date) => {
+    const dayMemories = getMemoriesForDate(date);
+    onDayClick(date, dayMemories);
   };
 
-  // Generate calendar days for mobile (2 weeks) or desktop (full month)
+  // Generate calendar days
   const renderCalendarDays = () => {
     const days = [];
     const today = new Date();
     const todayString = today.toDateString();
 
     if (isMobile) {
-      // Mobile: Show 2 weeks centered around today or current date
+      // Mobile: Show 2 weeks centered around current date
       const startOfWeek = new Date(currentDate);
-      startOfWeek.setDate(currentDate.getDate() - currentDate.getDay()); // Start of week
+      startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
 
-      // Show 2 weeks (14 days)
       for (let i = 0; i < 14; i++) {
         const date = new Date(startOfWeek);
         date.setDate(startOfWeek.getDate() + i);
@@ -123,7 +114,7 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
         days.push(
           <button
             key={i}
-            onClick={() => handleDayClick(date.getDate())}
+            onClick={() => handleDayClick(date)}
             className={`
               h-16 border border-gray-100 transition-all duration-200 relative
               flex flex-col items-center justify-center text-sm font-medium
@@ -139,7 +130,6 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
               {date.getDate()}
             </span>
             
-            {/* Memory count indicator */}
             {dayMemories.length > 0 && (
               <span className="absolute top-1 right-1 text-xs bg-white rounded-full w-4 h-4 flex items-center justify-center text-purple-600 font-bold">
                 {dayMemories.length > 9 ? '9+' : dayMemories.length}
@@ -149,7 +139,12 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
         );
       }
     } else {
-      // Desktop: Full month view (existing logic)
+      // Desktop: Full month view
+      const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      const daysInMonth = lastDayOfMonth.getDate();
+      const startingDayOfWeek = firstDayOfMonth.getDay();
+
       // Empty cells for days before the first day of the month
       for (let i = 0; i < startingDayOfWeek; i++) {
         days.push(
@@ -168,7 +163,7 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
         days.push(
           <button
             key={day}
-            onClick={() => handleDayClick(day)}
+            onClick={() => handleDayClick(date)}
             className={`
               h-12 border border-gray-100 transition-all duration-200 relative
               flex items-center justify-center text-sm font-medium
@@ -181,7 +176,6 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
               {day}
             </span>
             
-            {/* Memory count indicator */}
             {dayMemories.length > 0 && (
               <span className="absolute top-1 right-1 text-xs bg-white rounded-full w-4 h-4 flex items-center justify-center text-purple-600 font-bold">
                 {dayMemories.length > 9 ? '9+' : dayMemories.length}
@@ -194,6 +188,13 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
 
     return days;
   };
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-6">
@@ -216,7 +217,7 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
         
         <div className="flex items-center space-x-1 sm:space-x-2">
           <button
-            onClick={previousMonth}
+            onClick={previousPeriod}
             className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -225,7 +226,7 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
           </button>
           
           <button
-            onClick={nextMonth}
+            onClick={nextPeriod}
             className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -250,9 +251,7 @@ export function CalendarHeatMap({ memories, onDayClick }: CalendarHeatMapProps) 
       )}
 
       {/* Calendar Grid */}
-      <div className={`grid gap-0 border-l border-t border-gray-100 ${
-        isMobile ? 'grid-cols-7' : 'grid-cols-7'
-      }`}>
+      <div className="grid gap-0 border-l border-t border-gray-100 grid-cols-7">
         {renderCalendarDays()}
       </div>
 
